@@ -1,31 +1,38 @@
-FROM mcr.microsoft.com/aifx/acpt/stable-ubuntu2204-cu118-py310-torch271:biweekly.202509.2
+FROM mcr.microsoft.com/aifx/acpt/stable-ubuntu2204-cu126-py310-torch280:biweekly.202606.3
 
-# Install pip dependencies
+# Base conda env (Python 3.13) security floors.
+# PyJWT>=2.13.0: pinned transitive dep brought in by the base image; fixes GHSA-jq35-7prp-9v3f and GHSA-993g-76c3-p5m4.
+# py-rattler>=0.24.0: pinned transitive dep of base conda tooling; brought in by base image, fixes GHSA-q53q-5r4j-5729.
+# cryptography>=48.0.1: pinned transitive dep brought in by the base image; fixes GHSA-537c-gmf6-5ccf.
+RUN conda install -n ptca -c conda-forge -y 'pip>=26.1' && \
+    conda install -n base -c conda-forge -y 'pip>=26.1' 'conda=26.3.2' && \
+    conda run -n base python -m pip install --upgrade --no-cache-dir \
+        'python-dotenv>=1.2.2' \
+        'urllib3>=2.7.0' \
+        'idna>=3.15' \
+        'click>=8.3.3' \
+        'aiohttp>=3.14.0' \
+        'PyJWT>=2.13.0' \
+        'py-rattler>=0.24.0' \
+        'cryptography>=48.0.1' && \
+    conda run -n ptca python -m pip install --upgrade --no-cache-dir \
+        'urllib3>=2.7.0' \
+        'idna>=3.15' \
+        'cryptography>=48.0.1' && \
+    conda clean -a -y && \
+    rm -rf /opt/conda/pkgs
+
+# Install pip dependencies (runs in default PTCA conda env)
 COPY requirements.txt .
-RUN pip install -r requirements.txt --no-cache-dir
-# Upgrade known vulnerable packages again just to be safe
-RUN pip install --upgrade \
-    requests==2.32.4 \
-    urllib3==2.5.0 \
-    pillow==11.3.0 || true
-
-# Repeat for other envs if applicable
-RUN /opt/conda/bin/pip install --upgrade \
-    requests==2.32.4 \
-    urllib3==2.5.0 \
-    pillow==11.3.0 || true
-
-RUN /opt/conda/envs/ptca/bin/pip install --upgrade \
-    requests==2.32.4 \
-    urllib3==2.5.0 \
-    pillow==11.3.0 || true
+# pyarrow>=23.0.1: pinned transitive dep of azureml-dataset-runtime; fixes GHSA-rgxp-2hwp-jwgg.
+RUN pip install -r requirements.txt --no-cache-dir && \
+    pip install --upgrade --no-cache-dir --no-deps 'pyarrow>=23.0.1'
 
 # Inference requirements
 COPY --from=mcr.microsoft.com/azureml/o16n-base/python-assets:20230419.v1 /artifacts /var/
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
-        libcurl4 \
-        liblttng-ust1 \
         libunwind8 \
         libxml++2.6-2v5 \
         nginx-light \
@@ -39,23 +46,9 @@ RUN apt-get update && \
     ln -sf /etc/nginx/sites-available/app /etc/nginx/sites-enabled/app && \
     rm -f /etc/nginx/sites-enabled/default
 
-RUN apt-get update && \
-    apt-get install -y --only-upgrade \
-        libpython3.10-stdlib \
-        python3.10 \
-        libpython3.10-minimal \
-        python3.10-minimal \
-        libpam0g \
-        libpam-modules-bin \
-        libpam-modules \
-        libpam-runtime \
-        sudo && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-
 ENV SVDIR=/var/runit
 ENV WORKER_TIMEOUT=400
 EXPOSE 5001 8883 8888
 
-# support Deepspeed launcher requirement of passwordless ssh login
-RUN apt-get update
-RUN apt-get install -y openssh-server openssh-client
+# Deepspeed launcher requires passwordless ssh; server side not in base image
+RUN apt-get update && apt-get install -y openssh-server && rm -rf /var/lib/apt/lists/*

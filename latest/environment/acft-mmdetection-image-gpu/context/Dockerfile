@@ -1,26 +1,73 @@
-# PTCA image
-FROM mcr.microsoft.com/aifx/acpt/stable-ubuntu2204-cu118-py310-torch271:biweekly.202509.2
+FROM mcr.microsoft.com/aifx/acpt/stable-ubuntu2204-cu126-py310-torch280:biweekly.202606.3
 
 USER root
-RUN apt-get -y update && apt-get install -y libglib2.0-0
+# Pull latest Ubuntu 22.04 security patches.
+# Explicit --only-upgrade list ensures USN-8298-1 (.NET), USN-8319-1 (libgcrypt20),
+# and USN-8362-1 (xz-utils/liblzma5) patches are applied; || true skips packages
+# not present in this image without failing the build.
+RUN apt-get -y update && apt-get -y upgrade \
+ && apt-get -y install --only-upgrade \
+        dotnet-hostfxr-8.0 \
+        dotnet-host-8.0 \
+        dotnet-runtime-8.0 \
+        libgcrypt20 \
+        liblzma5 \
+        xz-utils \
+ || true \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install required packages from pypi
 COPY requirements.txt .
 RUN pip install -r requirements.txt --no-cache-dir
-RUN apt-get install -y expat
+# openmim still imports pkg_resources, which is removed from setuptools>=82.
+# Keep a temporary compatibility pin for mim installation, then restore setuptools.
+RUN pip install --no-cache-dir 'setuptools<82'
 
-# # # Install mmdet
-# Temporary workaround for https://github.com/open-mmlab/mim/issues/244
-RUN pip install pip==24.0
-# # Note that MMDet installs pycocotools
 # Note: mmdet should be installed via mim to access the model zoo config folder.
 RUN mim install mmdet==3.3.0
 # Temporary workaround for https://github.com/open-mmlab/mmdetection/issues/11668 (when mmdet updated, remove lines below)
 RUN mim install mmcv==2.2.0 -f https://download.openmmlab.com/mmcv/dist/cu118/torch2.2/index.html --no-cache-dir
+RUN pip install --no-cache-dir --upgrade setuptools==82.0.0
 RUN sed -i 's/2.2.0/2.3.0/' /opt/conda/envs/ptca/lib/python3.10/site-packages/mmdet/__init__.py
 
-# Vulnerability Fix
-RUN pip install gunicorn==23.0.0
+# azureml-acft-accelerator still pins onnx<=1.17.0, which keeps vulnerable onnx
+# in the image. Use onnx-weekly until that parent package allows a patched stable onnx.
+RUN pip uninstall -y onnx && pip install --no-cache-dir 'onnx-weekly>=1.22.0.dev20260504'
 
-# Upgrade requests in the system Python (3.13) for fixing vulnerability
-RUN /opt/conda/bin/python3.13 -m pip install --upgrade requests urllib3 || true
+# pip has no parent package to upgrade. The current base still ships pip 26.0.1
+# in both Python envs, so install the patched conda-forge build without changing
+# the rest of the environment.
+RUN conda install -n ptca -y -c conda-forge --freeze-installed 'pip=26.1.1' \
+ && conda install -n base -y -c conda-forge --freeze-installed 'pip=26.1.1'
+
+# Base env packages are outside requirements.txt. Metadata checks show their
+# parents allow patched versions but do not require them, so keep direct floors.
+# urllib3 is pulled by conda/requests-style tooling and must be >=2.7.0 for
+# GHSA-qccp-gfcp-xxvc and GHSA-mf9v-mfxr-j63j.
+# cryptography is brought in by the base image; fixes GHSA-537c-gmf6-5ccf.
+# pydantic-settings: pinned transitive dep of ACPT base image; brought in by base image, fixes GHSA-4xgf-cpjx-pc3j.
+RUN conda run -n base python -m pip install --no-cache-dir --upgrade \
+    'urllib3>=2.7.0,<3' \
+    'idna>=3.15' \
+    'click>=8.3.3' \
+    'python-dotenv>=1.2.2' \
+    'aiohttp>=3.14.0' \
+    'PyJWT>=2.13.0' \
+    'cryptography>=48.0.1' \
+    'pydantic-settings>=2.14.2'
+
+# aiohttp is also present in the ptca env (GHSA-hg6j-4rv6-33pg, GHSA-jg22-mg44-37j8).
+# pyarrow <23.0.1 is vulnerable (GHSA-rgxp-2hwp-jwgg).
+# cryptography is brought in by the base image; fixes GHSA-537c-gmf6-5ccf.
+RUN conda run -n ptca python -m pip install --no-cache-dir --upgrade \
+    'aiohttp>=3.14.0' \
+    'pyarrow>=23.0.1' \
+    'cryptography>=48.0.1'
+
+# The conda pip upgrade can reinstall the rattler solver. The base image does
+# not need it for runtime, and its compiled extension currently carries Rust CVEs.
+RUN conda config --system --set solver classic \
+ && /opt/conda/bin/python3.13 -m pip uninstall -y py-rattler conda-rattler-solver 2>/dev/null || true \
+ && rm -rf /opt/conda/lib/python3.13/site-packages/rattler* /opt/conda/lib/python3.13/site-packages/conda_rattler_solver* /opt/conda/lib/python3.13/site-packages/py_rattler* /opt/conda/conda-meta/py-rattler-*.json /opt/conda/conda-meta/conda-rattler-solver-*.json
+
+RUN conda clean -a -y && rm -rf /opt/miniconda/pkgs/

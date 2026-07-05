@@ -1,0 +1,62 @@
+$schema: https://azuremlschemas.azureedge.net/latest/model.schema.json
+name: Phi-4-mini-instruct-generic-cpu-dq44
+path: ./
+isArchived: true
+tags:
+  capabilities: tool-calling
+  supportsReasoning: ''
+  reasoningStart: ''
+  reasoningEnd: ''
+  contextLength: 131072
+  minFLVersion: 0.0.0
+system_metadata:
+  alias: phi-4-mini-instruct-generic-cpu-dq44
+  publisher: Microsoft
+  directoryPath: v1
+  foundryLocal: outlook_test
+  inputModalities:
+  - text
+  license: MIT
+  licenseDescription: This model is provided under the License Terms available 
+    at <https://huggingface.co/microsoft/Phi-4-mini-instruct/blob/main/LICENSE>.
+  maxOutputTokens: 2048
+  outputModalities:
+  - text
+  promptTemplate: '{"system": "<|system|>{Content}<|end|>", "user": "<|user|>{Content}<|end|>",
+    "assistant": "<|assistant|>{Content}<|end|>", "prompt": "<|user|>{Content}<|end|><|assistant|>"}'
+  supportsToolCalling: true
+  toolCallEnd: <|/tool_call|>
+  toolCallStart: <|tool_call|>
+  toolRegisterEnd: <|/tool|>
+  toolRegisterStart: <|tool|>
+  toolResponseEnd: <|tool_response|>
+  toolResponseStart: <|tool_response|>
+  tasks:
+    inferenceTasks:
+    - chat-completion
+  platformCapabilities:
+    enableMaap: false
+variantInfo:
+  parents:
+  - assetId: azureml://registries/azureml/models/Phi-4-mini-instruct/versions/1
+  variantMetadata:
+    modelType: ONNX
+    quantization:
+    - RTN
+    device: cpu
+    executionProvider: CPUExecutionProvider
+    fileSizeBytes: 4527313326
+    vRamFootprintBytes: 4527313326
+version: 1
+description: |-
+  This model is an optimized version of Phi-4-mini-instruct to enable local inference on CPUs. This model uses DiscQuant quantization.
+
+  # Model Description
+  - **Developed by:** Microsoft
+  - **Model type:** ONNX
+  - **License:** MIT
+  - **Model Description:** This is a conversion of the Phi-4-mini-instruct for local inference on CPUs.
+  - **Disclaimer:** Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.
+
+  # Base Model Information
+  See Hugging Face model [Phi-4-mini-instruct](https://huggingface.co/microsoft/Phi-4-mini-instruct) for details.

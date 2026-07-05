@@ -1,0 +1,68 @@
+$schema: https://azuremlschemas.azureedge.net/latest/model.schema.json
+name: ministral-3-3b-instruct-2512-cuda-gpu
+path: ./
+isArchived: true
+tags:
+  capabilities: tool-calling
+  supportsReasoning: ''
+  reasoningStart: ''
+  reasoningEnd: ''
+  contextLength: 262144
+  minFLVersion: 1.2.0
+system_metadata:
+  alias: ministral-3-3b-instruct-2512
+  publisher: Microsoft
+  directoryPath: v1
+  foundryLocal: ''
+  inputModalities:
+  - text
+  - image
+  license: apache-2.0
+  licenseDescription: This model is provided under the License Terms available 
+    at <https://www.apache.org/licenses/LICENSE-2.0.html>.
+  maxOutputTokens: 2048
+  outputModalities:
+  - text
+  promptTemplate: '{"system": "[SYSTEM_PROMPT]{Content}[/SYSTEM_PROMPT]", "user":
+    "[INST]{Content}[/INST]", "assistant": "{Content}</s>", "prompt": "[INST]{Content}[/INST]"}'
+  supportsToolCalling: true
+  toolCallEnd: </s>
+  toolCallStart: '[TOOL_CALLS]'
+  toolRegisterEnd: '[/AVAILABLE_TOOLS]'
+  toolRegisterStart: '[AVAILABLE_TOOLS]'
+  toolResponseEnd: '[/TOOL_RESULTS]'
+  toolResponseStart: '[TOOL_RESULTS]'
+  tasks:
+    inferenceTasks:
+    - vision-language-chat
+  platformCapabilities:
+    enableMaap: false
+variantInfo:
+  parents:
+  - assetId: 
+      azureml://registries/azureml/models/ministral-3-3b-instruct-2512/versions/1
+  variantMetadata:
+    modelType: ONNX
+    quantization:
+    - RTN
+    device: gpu
+    executionProvider: CUDAExecutionProvider
+    fileSizeBytes: 3857772715
+    vRamFootprintBytes: 3857772715
+version: 1
+description: |-
+  This model is an optimized version of Ministral-3-3B-Instruct-2512 for local inference on CUDA GPUs. This optimized model is published here in ONNX format to run on CUDA-capable GPU devices, with the precision best suited to this target.
+
+  # ONNX Models
+  Here are some of the optimized configurations we have added:
+  1. ONNX model for CUDA GPU using RTN quantization.
+
+  # Model Description
+  - **Developed by:** Microsoft
+  - **Model type:** ONNX
+  - **License:** apache-2.0
+  - **Model Description:** This is a conversion of Ministral-3-3B-Instruct-2512 for local inference.
+  - **Disclaimer:** Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.
+
+  # Base Model Information
+  See Hugging Face model [Ministral-3-3B-Instruct-2512](https://huggingface.co/mistralai/Ministral-3-3B-Instruct-2512) for details.

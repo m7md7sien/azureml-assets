@@ -4,16 +4,17 @@ channels:
 - anaconda
 dependencies:
 - python=3.10
-- pip=21.3.1
+- pip=26.1.1
 - pandas~=1.5.3
 - scipy~=1.10.0
 - numpy~=1.22.0
 - pip:
-  - scikit-learn-intelex==2025.8.0
-  - azureml-core==1.60.0.post1
-  - azureml-defaults==1.60.0
-  - azureml-mlflow==1.60.0.post1
-  - azureml-telemetry==1.60.0
+  - scikit-learn-intelex==2026.1.0
+  - azureml-core==1.61.0.post4
+  - azureml-defaults==1.62.0
+  - azureml-inference-server-http==1.5.1
+  - azureml-mlflow==1.62.0.post5
+  - azureml-telemetry==1.62.0
   - scikit-learn~=1.5.0
   - joblib~=1.2.0
   # azureml-automl-common-tools packages
@@ -26,4 +27,6 @@ dependencies:
   - tqdm~=4.66.3
   - py-cpuinfo==5.0.0
   - torch-tb-profiler~=0.4.0
-  - starlette==0.47.2
+  - starlette>=1.0.1
+  - cryptography==48.0.1  # pinned transitive dep of azureml-mlflow / azureml-core; fixes GHSA-537c-gmf6-5ccf
+  - pyarrow>=23.0.1  # pinned transitive dep of azureml-dataset-runtime; fixes GHSA-rgxp-2hwp-jwgg

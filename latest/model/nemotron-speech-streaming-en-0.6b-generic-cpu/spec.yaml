@@ -1,0 +1,58 @@
+$schema: https://azuremlschemas.azureedge.net/latest/model.schema.json
+name: nemotron-speech-streaming-en-0.6b-generic-cpu
+path: ./
+isArchived: true
+tags:
+  capabilities: ''
+  supportsReasoning: ''
+  reasoningStart: ''
+  reasoningEnd: ''
+  contextLength: 0
+  minFLVersion: 1.1.0
+system_metadata:
+  alias: nemotron-speech-streaming-en-0.6b
+  publisher: Microsoft
+  directoryPath: v3
+  foundryLocal: ''
+  inputModalities:
+  - audio
+  license: MIT
+  licenseDescription: This model is provided under the License Terms available 
+    at 
+    <https://github.com/microsoft/Foundry-Local/blob/main/licenses/nemotron-speech-streaming.md>.
+  maxOutputTokens: 2048
+  outputModalities:
+  - text
+  promptTemplate: ''
+  tasks:
+    inferenceTasks:
+    - automatic-speech-recognition
+  platformCapabilities:
+    enableMaap: false
+variantInfo:
+  parents:
+  - assetId: 
+      azureml://registries/azureml/models/nemotron-speech-streaming-en-0.6b/versions/1
+  variantMetadata:
+    modelType: ONNX
+    quantization:
+    - RTN
+    device: cpu
+    executionProvider: CPUExecutionProvider
+    fileSizeBytes: 730746534
+    vRamFootprintBytes: 730746534
+version: 3
+description: |
+  This model is an optimized version of nemotron-speech-streaming-en-0.6b to enable local inference on CPUs. This model uses RTN quantization.
+
+  # Model Description
+
+  - **Developed by:** Microsoft
+  - **Model type:** ONNX
+  - **License:** MIT
+  - **Model Description:** This is an optimized version of the nemotron-speech-streaming-en-0.6b model for local inference on CPUs.
+  - **Disclaimer:** Model is only an optimization of the base model, any risk associated with the model is the responsibility of the user of the model. Please verify and test for your scenarios. There may be a slight difference in output from the base model with the optimizations applied. Note that optimizations applied are distinct from fine tuning and thus do not alter the intended uses or capabilities of the model.
+
+  # Base Model Information
+
+  See Hugging Face model [nemotron-speech-streaming-en-0.6b](https://huggingface.co/nvidia/nemotron-speech-streaming-en-0.6b) for details.

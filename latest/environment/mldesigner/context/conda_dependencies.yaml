@@ -2,9 +2,10 @@ name: mldesigner
 channels:
 - conda-forge
 dependencies:
-- python=3.9
-- pip=21.3.1
+- python=3.10
+- pip=26.1
+- setuptools<82
 - pip:
-  - azure-ai-ml==1.29.0
-  - azureml-mlflow==1.60.0.post1
-  - mldesigner==0.1.0b21
+  - azure-ai-ml==1.34.0
+  - azureml-mlflow==1.62.0.post5
+  - mldesigner==0.1.0b22

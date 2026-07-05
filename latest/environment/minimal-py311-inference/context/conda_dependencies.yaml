@@ -4,11 +4,10 @@ channels:
 - anaconda
 dependencies:
 - python=3.11
-- pip=25.2
+- pip
 - pip:
-  - azureml-defaults==1.60.0
-  - azureml-inference-server-http==1.5.0
-  - azure-storage-blob==12.26.0
-  - azure-identity==1.25.1
+  - azureml-inference-server-http==1.5.1
+  - azure-storage-blob==12.30.0
+  - azure-identity==1.25.3
   - numpy
-  - joblib==1.5.2
+  - joblib==1.5.3

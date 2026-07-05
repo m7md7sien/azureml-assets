@@ -2,9 +2,9 @@ name: project_environment
 channels:
   - conda-forge
 dependencies:
-  - pip=23.3
-  - python=3.9.18
-  - setuptools=78.1.1
-  - cython=0.29.24
+  - python=3.12.8
   - pip:
-      - azureml-designer-datatransform-modules==0.0.102
+      - pip>=25.3
+      - urllib3>=2.6.0
+      - cryptography>=46.0.7
+      - azureml-designer-datatransform-modules==0.0.103

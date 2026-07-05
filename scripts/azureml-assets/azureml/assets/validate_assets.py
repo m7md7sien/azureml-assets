@@ -34,7 +34,7 @@ WARNING_TEMPLATE = "Warning during validation of {file}: {warning}"
 NAMING_CONVENTION_URL = "https://github.com/Azure/azureml-assets/wiki/Asset-naming-convention"
 INVALID_STRINGS = [["azureml", "azure"], "aml"]  # Disallow these in any asset name
 NON_MODEL_INVALID_STRINGS = ["microsoft"]  # Allow these in model names and other assets related to models
-MODEL_NAMES_VALIDATION_OVERRIDE_PREFIX = ["Azure-AI-"]  # Exception for Azure-AI models
+MODEL_NAMES_VALIDATION_OVERRIDE_PREFIX = ["Azure-"]  # Exception for Azure- models
 MODEL_RELATED_ASSETS = [assets.AssetType.MODEL, assets.AssetType.EVALUATIONRESULT]
 NON_MODEL_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_.-]{0,254}$")
 
@@ -294,7 +294,7 @@ def validate_build_context(environment_config: assets.EnvironmentConfig) -> int:
     error_count = 0
     # Iterate over all files in the build context
     for file_path in environment_config.release_paths:
-        with open(file_path) as f:
+        with open(file_path, encoding='utf-8') as f:
             # Read file into memory, normalize EOL characters
             contents = f.read()
             contents = contents.replace("\r\n", "\n")
@@ -464,7 +464,7 @@ def validate_tags(asset_config: assets.AssetConfig, valid_tags_filename: str) ->
     """
     error_count = 0
 
-    with open(Path(__file__).parent / CONFIG_DIRECTORY / valid_tags_filename) as f:
+    with open(Path(__file__).parent / CONFIG_DIRECTORY / valid_tags_filename, encoding='utf-8') as f:
         valid_tags = YAML().load(f)
 
     asset_spec = asset_config._spec._yaml
@@ -621,7 +621,7 @@ def confirm_model_validation_results(
             error_count += 1
         else:
             overall_summary = {}
-            with open(validation_job_details_path) as f:
+            with open(validation_job_details_path, encoding='utf-8') as f:
                 overall_summary = json.load(f)
 
             validation_run_status = overall_summary.get(
@@ -818,6 +818,115 @@ def confirm_min_sku_spec(
     return 0
 
 
+def _is_empty_value(value) -> bool:
+    """Return True if the value should be treated as absent for backfill purposes."""
+    if value is None:
+        return True
+    if isinstance(value, str) and not value.strip():
+        return True
+    if isinstance(value, (list, dict)) and len(value) == 0:
+        return True
+    return False
+
+
+def _to_comma_separated_string(value):
+    """Convert a list to a trimmed comma-separated string, leaving other types unchanged."""
+    if isinstance(value, list):
+        return ",".join(str(item).strip() for item in value if str(item).strip())
+    return value
+
+
+def _normalize_sku_list(value):
+    """Normalize a list of SKUs to trimmed strings; pass through non-list values."""
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return value
+
+
+def _is_shared_compute_enabled(value) -> bool:
+    """Strictly interpret a sharedComputeCapacityEnabled value as enabled or not.
+
+    Accepts a real boolean True or a case-insensitive "true" string. Everything else
+    (False, "false", "", None, numbers, etc.) is treated as not enabled so that a model
+    with shared compute disabled still fails validation as it did before.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() == "true"
+    return False
+
+
+def backfill_validation_fields_from_system_metadata(model: Model, system_metadata: dict) -> None:
+    """Apply system_metadata equivalents onto the validator-visible tags/properties.
+
+    The model spec validator reads required fields from tags/properties only, while the
+    Azure ML SDK ``Model`` loaded from the spec has no awareness of ``system_metadata``.
+    ``system_metadata`` is the source of truth for migrated models, so when it specifies a
+    field, its value overrides any legacy tag/property used during validation. When
+    ``system_metadata`` does not specify a field (missing or empty), the existing
+    tag/property is left untouched as a fallback.
+
+    Args:
+        model (Model): model loaded from spec, mutated in place.
+        system_metadata (dict): system_metadata section from the model spec.
+    """
+    if not system_metadata:
+        return
+
+    if model.tags is None:
+        model.tags = {}
+    if model.properties is None:
+        model.properties = {}
+
+    tasks = system_metadata.get("tasks") or {}
+    sku = system_metadata.get("SKU") or {}
+    supported_computes = system_metadata.get("supportedComputes") or {}
+
+    # tag name -> equivalent system_metadata value (converted to tags format)
+    tag_equivalents = {
+        MLFlowModelTags.TASK: _to_comma_separated_string(tasks.get("inferenceTasks")),
+        MLFlowModelTags.LICENSE: system_metadata.get("license"),
+        MLFlowModelTags.INFERENCE_COMPUTE_ALLOWLIST:
+            _normalize_sku_list(supported_computes.get("inferenceComputes")),
+        MLFlowModelTags.EVALUATION_COMPUTE_ALLOWLIST:
+            _normalize_sku_list(supported_computes.get("evaluationComputes")),
+        MLFlowModelTags.FINETUNE_COMPUTE_ALLOWLIST:
+            _normalize_sku_list(supported_computes.get("finetuneComputes")),
+    }
+    for tag_name, value in tag_equivalents.items():
+        if not _is_empty_value(value):
+            model.tags[tag_name] = value
+
+    # property name -> equivalent system_metadata value (converted to properties format)
+    property_equivalents = {
+        MLFlowModelProperties.INFERENCE_MIN_SKU_SPEC: sku.get("inferenceMinSkuSpec"),
+        MLFlowModelProperties.INFERENCE_RECOMMENDED_SKU: _normalize_sku_list(sku.get("inferenceRecommendedSkus")),
+        MLFlowModelProperties.EVALUATION_MIN_SKU_SPEC: sku.get("evaluationMinSkuSpec"),
+        MLFlowModelProperties.EVALUATION_RECOMMENDED_SKU: _normalize_sku_list(sku.get("evaluationRecommendedSkus")),
+        MLFlowModelProperties.FINETUNE_MIN_SKU_SPEC: sku.get("finetuneMinSkuSpec"),
+        MLFlowModelProperties.FINETUNE_RECOMMENDED_SKU: _normalize_sku_list(sku.get("finetuneRecommendedSkus")),
+        MLFlowModelProperties.FINETUNING_TASKS: _to_comma_separated_string(tasks.get("fineTuningTasks")),
+    }
+    for property_name, value in property_equivalents.items():
+        if isinstance(value, str):
+            value = value.strip()
+        if not _is_empty_value(value):
+            model.properties[property_name] = value
+
+    # sharedComputeCapacityEnabled maps to both a tag (presence) and a property (truthy value).
+    # When system_metadata specifies it, it is authoritative and overrides legacy tag/property.
+    if "sharedComputeCapacityEnabled" in system_metadata:
+        if _is_shared_compute_enabled(system_metadata.get("sharedComputeCapacityEnabled")):
+            model.tags[MLFlowModelTags.SHARED_COMPUTE_CAPACITY] = ""
+            model.properties[MLFlowModelProperties.SHARED_COMPUTE_CAPACITY] = "True"
+        else:
+            # system_metadata says shared compute is disabled; reflect that so validation
+            # (which requires it enabled) flags the model instead of trusting stale legacy values.
+            model.tags.pop(MLFlowModelTags.SHARED_COMPUTE_CAPACITY, None)
+            model.properties[MLFlowModelProperties.SHARED_COMPUTE_CAPACITY] = ""
+
+
 def validate_model_spec(asset_config: assets.AssetConfig) -> int:
     """Validate model spec.
 
@@ -847,6 +956,15 @@ def validate_model_spec(asset_config: assets.AssetConfig) -> int:
             f"Bypass validation for {asset_config.name} as model type is: {model_config.type.value}"
         )
         return 0
+
+    # The SDK Model object has no awareness of system_metadata. Apply system_metadata as the
+    # source of truth onto the validator-visible tags/properties for migrated models, so its
+    # values take precedence over any legacy tag/property.
+    try:
+        system_metadata = asset_config.spec_as_object().system_metadata
+    except Exception:
+        system_metadata = {}
+    backfill_validation_fields_from_system_metadata(model, system_metadata)
 
     # confirm must have
     if not model.tags.get(MLFlowModelTags.TASK):
@@ -906,7 +1024,7 @@ def validate_model_spec(asset_config: assets.AssetConfig) -> int:
     )
 
     # check valid computes for inference
-    with open(SUPPORTED_INFERENCE_SKU_FILE_PATH) as f:
+    with open(SUPPORTED_INFERENCE_SKU_FILE_PATH, encoding='utf-8') as f:
         supported_inference_skus = set(json.load(f))
         unsupported_skus_in_spec = [
             sku
@@ -968,7 +1086,7 @@ def validate_mlflow_model(asset_config: assets.AssetConfig) -> int:
         # Update mlflow_model_detected variable for Github Actions only
         if "GITHUB_OUTPUT" in os.environ:
             logger.print("Setting GITHUB_OUTPUT env variable for mlflow_model_detected=true")
-            with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+            with open(os.environ["GITHUB_OUTPUT"], "a", encoding='utf-8') as f:
                 print("mlflow_model_detected=true", file=f)
 
 
@@ -1053,12 +1171,12 @@ def validate_assets(input_dirs: List[Path],
                 _log_warning(asset_config_path, e)
             continue
 
-        # Extract model variant info and defaultDeploymentTemplate from spec (not supported in SDK)
-        unsupported_fields = ["variantInfo", "defaultDeploymentTemplate"]
+        # Extract fields not supported in SDK from spec
+        unsupported_fields = ["variantInfo", "defaultDeploymentTemplate", "isArchived", "intellectualProperty"]
         unsupported_fields_mapping = {}
 
         if asset_config.type == assets.AssetType.MODEL:
-            with open(asset_config.spec_with_path, "r") as f:
+            with open(asset_config.spec_with_path, "r", encoding='utf-8') as f:
                 spec_config = yaml.safe_load(f)
 
                 for field in unsupported_fields:
@@ -1069,8 +1187,8 @@ def validate_assets(input_dirs: List[Path],
             if unsupported_fields_mapping:
                 logger.print(f"Found unsupported fields in spec, popping out info and rewriting spec. "
                              f"unsupported fields: {unsupported_fields_mapping}")
-                with open(asset_config.spec_with_path, "w") as f:
-                    yaml.dump(spec_config, f)
+                with open(asset_config.spec_with_path, "w", encoding='utf-8') as f:
+                    yaml.dump(spec_config, f, allow_unicode=True, default_flow_style=False)
 
         # Populate dictionary of asset names to asset config paths
         asset_dirs[f"{asset_config.type.value} {asset_config.name}"].append(asset_config_path)
@@ -1186,8 +1304,8 @@ def validate_assets(input_dirs: List[Path],
         # Write unsupported fields back to spec
         if unsupported_fields_mapping:
             spec_config.update(unsupported_fields_mapping)
-            with open(asset_config.spec_with_path, "w") as f:
-                yaml.dump(spec_config, f)
+            with open(asset_config.spec_with_path, "w", encoding='utf-8') as f:
+                yaml.dump(spec_config, f, allow_unicode=True, default_flow_style=False)
 
     # Ensure unique assets
     for type_and_name, dirs in asset_dirs.items():
